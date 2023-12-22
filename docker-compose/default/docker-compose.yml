@@ -1,0 +1,156 @@
+services:
+
+  zipkin:
+    image: openzipkin/zipkin
+    mem_limit: 800m
+    ports:
+      - "9411:9411"
+    networks:
+      - farias30-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0.0
+    command: ["start-dev"]
+    mem_limit: 800m
+    ports:
+      - "8181:8181"
+    networks:
+      - farias30-network
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8181
+
+  config-server:
+    image: gibbbackfc/config-server:latest
+    mem_limit: 800m
+    ports:
+      - "8085:8085"
+    networks:
+      - farias30-network
+    depends_on:
+      - zipkin
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+  discovery-server:
+    image: gibbbackfc/discovery-server:latest
+    mem_limit: 800m
+    ports:
+      - "8761:8761"
+    networks:
+      - farias30-network
+    depends_on:
+      - config-server
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8085/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+  hotel-service:
+    image: gibbbackfc/hotel-service:latest
+    mem_limit: 800m
+    ports:
+      - "8080:8080"
+    networks:
+      - farias30-network
+    depends_on:
+      - config-server
+      - discovery-server
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8085/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+  room-service:
+    image: gibbbackfc/room-service:latest
+    mem_limit: 800m
+    ports:
+      - "8081:8081"
+    networks:
+      - farias30-network
+    depends_on:
+      - config-server
+      - discovery-server
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8085/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+    
+  reservation-service:
+    image: gibbbackfc/reservation-service:latest
+    mem_limit: 800m
+    ports:
+      - "8082:8082"
+    networks:
+      - farias30-network
+    depends_on:
+      - config-server
+      - discovery-server
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8085/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+  gateway-service:
+    image: gibbbackfc/gateway-server:latest
+    mem_limit: 800m
+    ports:
+      - "8066:8066"
+    networks:
+      - farias30-network
+    depends_on:
+      - config-server
+      - discovery-server
+      - hotel-service
+      - room-service
+      - reservation-service
+      - keycloak
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 180s
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8085/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+networks:
+  farias30-network:
