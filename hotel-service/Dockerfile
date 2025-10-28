@@ -1,4 +1,4 @@
-FROM openjdk:17-jdk-slim AS build
+FROM openjdk:21-jdk-slim AS build
 
 COPY target/hotel-service-0.0.1-SNAPSHOT.jar hotel-service-0.0.1-SNAPSHOT.jar
 
